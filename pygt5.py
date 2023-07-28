@@ -215,7 +215,7 @@ class MainWindow(QMainWindow):
 
     def create_window(self, checked):
         if self.window2 is None:
-            self.window2 = AnotherWindow(self.location)
+            self.window2 = CreateWindow(self.location)
             self.window2.show()
 
         else:
@@ -240,7 +240,7 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True)
 
         for i in range(len(self.titles)):
-            self.btn = self.make_button(self.titles[i])
+            self.btn = self.make_button(self.location + self.titles[i])
             self.btn.setFixedSize(150,100)
             self.btn.setIcon(QIcon())
             text = self.btn.text()
@@ -273,7 +273,6 @@ class MainWindow(QMainWindow):
         
         # self.lay.addStretch(1)
 
-
     def ui(self):
 
         self.scroll = QScrollArea()
@@ -290,7 +289,7 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True)
 
         for i in range(len(self.titles)):
-            self.btn = self.make_button(self.titles[i])
+            self.btn = self.make_button(self.location + self.titles[i])
             if self.filters[self.btn.file_type] == True:
                 self.lay.addWidget(self.btn)
 
@@ -331,30 +330,25 @@ class MainWindow(QMainWindow):
             if type(source) == DragDropWidget:
                 
                 menu = QMenu()
-                if source.full_title[0:2] != "C:":
-                    rename_button = QAction("Rename")
-                    rename_button.triggered.connect(lambda x: self.rename(x,source))
-                    menu.addAction(rename_button)
-
-                    delete_button = QAction("Delete")
-                    delete_button.triggered.connect(lambda x: self.delete(x,source))
-                    menu.addAction(delete_button)
-
-                    copy_button = QAction("Copy")
-                    copy_button.triggered.connect(lambda x: self.copy(x,source))
-                    menu.addAction(copy_button)
-
-                    cut_button = QAction("Cut")
-                    cut_button.triggered.connect(lambda x: self.cut(x,source))
-                    menu.addAction(cut_button)
-                    if self.clipboard != (None,None):
-                        paste_button = QAction("Paste")
-                        paste_button.triggered.connect(lambda x: self.paste(x,source))
-                        menu.addAction(paste_button)
-
-                    favorite_button = QAction("Add Favorite")
-                    favorite_button.triggered.connect(lambda x: self.add_favorite(x,source))
-                    menu.addAction(favorite_button)
+                rename_button = QAction("Rename")
+                rename_button.triggered.connect(lambda x: self.rename(x,source))
+                menu.addAction(rename_button)
+                delete_button = QAction("Delete")
+                delete_button.triggered.connect(lambda x: self.delete(x,source))
+                menu.addAction(delete_button)
+                copy_button = QAction("Copy")
+                copy_button.triggered.connect(lambda x: self.copy(x,source))
+                menu.addAction(copy_button)
+                cut_button = QAction("Cut")
+                cut_button.triggered.connect(lambda x: self.cut(x,source))
+                menu.addAction(cut_button)
+                if self.clipboard != (None,None):
+                    paste_button = QAction("Paste")
+                    paste_button.triggered.connect(lambda x: self.paste(x,source))
+                    menu.addAction(paste_button)
+                favorite_button = QAction("Add Favorite")
+                favorite_button.triggered.connect(lambda x: self.add_favorite(x,source))
+                menu.addAction(favorite_button)
 
                 remove_favorite_button = QAction("Remove Favorite")
                 remove_favorite_button.triggered.connect(lambda x: self.remove_favorite(x,source))
@@ -414,7 +408,7 @@ class MainWindow(QMainWindow):
         for i in range(len(self.titles)):
             test = self.lay.itemAt(i).widget()
             if test.isChecked():
-                clipboard_list.append((self.location + test.new_text(),test.new_text()))
+                clipboard_list.append((test.new_text(),test.text()))
         if len(clipboard_list) > 0:
             self.clipboard = (clipboard_list,"cut")
         else:
@@ -425,20 +419,29 @@ class MainWindow(QMainWindow):
         for i in range(len(self.titles)):
             test = self.lay.itemAt(i).widget()
             if test.isChecked():
-                clipboard_list.append((self.location + test.new_text(),test.new_text()))
+                clipboard_list.append((test.new_text(),test.text()))
         if len(clipboard_list) > 0:
             self.clipboard = (clipboard_list,"copy")
         else:
             self.clipboard = (None,None)
 
     def delete(self,x,source):
-        os.remove(self.location + source.new_text())
-        # print("sorry you'll have to edit my code to delete " + source.new_text())
-        self.ui()
+
+        if os.path.exists(source.new_text()):
+            if os.path.isdir(source.new_text()):
+                try:
+                    os.rmdir(source.new_text())
+                except:
+                    self.errors = ErrorWindow("There are still files in the folder")
+                    self.errors.show()
+            else:
+                os.remove(source.new_text())
+            # print("sorry you'll have to edit my code to delete " + source.new_text())
+            self.ui()
 
     def rename(self,x,source):
-        rename_text = source.new_text()
-        self.rename_box = QLineEdit(source.new_text())
+        rename_text = source.text()
+        self.rename_box = QLineEdit(source.text())
         self.rename_box.selectAll()
 
         self.rename_box.returnPressed.connect(self.rename_action)
@@ -452,10 +455,10 @@ class MainWindow(QMainWindow):
 
     def rename_action(self):
 
-        os.rename(self.location + self.renamed_button.new_text(), self.location + self.rename_box.text())
+        os.rename(self.renamed_button.new_text(), self.location + self.rename_box.text())
         # print("thats too much power for one man")
 
-        btn = self.make_button(self.rename_box.text())
+        btn = self.make_button(self.location + self.rename_box.text())
         
         for i,name in enumerate(self.titles):
             if name.lower() > btn.new_text().lower():
@@ -465,17 +468,16 @@ class MainWindow(QMainWindow):
         self.rename_box.setParent(None)
         # self.ui()
 
-    def make_button(self,text):
-        title = text
-        if text[0:2] == "C:":
-            title = text.split("\\")[-1]
+    def make_button(self,path):
+
+        title = path.split("\\")[-1]
         btn = DragDropWidget(title)
         
-        btn.full_title = text
+        btn.full_title = path
         icon = QtGui.QIcon()
         if "." in title[1:]:
             btn.file_type = 0
-            extention = text.split(".")[-1].lower()
+            extention = path.split(".")[-1].lower()
             if extention in ["txt",'log','rtf']: 
                 icon.addPixmap(QtGui.QPixmap("C:\\Users\\leocn\\OneDrive - Drake University\\Documents\\Coding\\file explorer\\icons\\txt.png"))
             if extention in ["docx",'doc']:
@@ -511,12 +513,10 @@ class MainWindow(QMainWindow):
                 icon.addPixmap(QtGui.QPixmap("C:\\Users\\leocn\\OneDrive - Drake University\\Documents\\Coding\\file explorer\\icons\\blank.png"))
 
         else: # folders
-            if "C:" == text[0:2]:
-                try: x = os.listdir(text)
-                except: x = "locked"
-            else:
-                try: x = os.listdir(self.location + text)
-                except: x = "locked"
+
+            try: x = os.listdir(path)
+            except: x = "locked"
+
             if x == "locked":
                 icon.addPixmap(QtGui.QPixmap("C:\\Users\\leocn\\OneDrive - Drake University\\Documents\\Coding\\file explorer\\icons\\padlock.png"))
                 btn.file_type = 3
@@ -536,7 +536,7 @@ class MainWindow(QMainWindow):
 
         btn.setIcon(icon)
         btn.setCheckable(True)
-        btn.clicked.connect(lambda ch, text=text : self.click_check(text))
+        btn.clicked.connect(lambda ch, text=path : self.click_check(text)) # look at this
         btn.installEventFilter(self)
         btn.setStyleSheet("QPushButton { text-align: left; }")
         btn.setFont(self.font)
@@ -640,9 +640,13 @@ class MainWindow(QMainWindow):
     def enter_path(self):
         if os.path.exists(self.path_bar.text()):
             self.new_location(self.path_bar.text(),True)
+        else:
+            n = self.path_bar.text()
+            self.errors = ErrorWindow("The file path: '" + n + "' doesn't exist")
+            self.errors.show()
 
 
-class AnotherWindow(QWidget):
+class CreateWindow(QWidget):
 
     def __init__(self, location):
         super().__init__()
@@ -672,9 +676,6 @@ class AnotherWindow(QWidget):
 
 
     def eventFilter(self,source, event):
-        print(event.type())
-        # if event.type() == QEvent.InsertParagraphSeparator:
-        #     print(True)
         return super().eventFilter(source,event)
 
     def create_file(self):
@@ -690,6 +691,29 @@ class AnotherWindow(QWidget):
                 break
         window.lay.insertWidget(i,btn)
         window.titles.insert(i,btn.new_text())
+        self.close()
+
+class ErrorWindow(QWidget):
+
+    def __init__(self, error):
+        super().__init__()
+        self.setWindowTitle("ERROR")
+        self.font = QFont("Terminal",30)
+        self.setFixedSize(500,200)
+        layout = QVBoxLayout()
+
+        self.title = QLabel(error)
+        self.title.setFont(self.font)
+        self.title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.title)
+
+        self.label = QPushButton("I UNDERSTAND")
+        self.label.setFont(self.font)
+        self.label.clicked.connect(self.c)
+        layout.addWidget(self.label)
+        self.setLayout(layout)
+    
+    def c(self):
         self.close()
 
 
