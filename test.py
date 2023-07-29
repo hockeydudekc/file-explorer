@@ -1,46 +1,25 @@
 import sys
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QHBoxLayout, QFrame, QSplitter, QTextEdit, QApplication, QStyleFactory, QWidget
+from PyQt5.QtWidgets import (QApplication, QLabel, QWidget)
 
-class Example(QWidget):
 
-   def __init__(self):
-    super(Example, self).__init__()
-		
-    self.initUI()
-	
-   def initUI(self):
-	
-      hbox = QHBoxLayout(self)
-		
-      topleft = QTextEdit()
-      topleft.setFrameShape(QFrame.StyledPanel)
-      bottom = QFrame()
-      bottom.setFrameShape(QFrame.StyledPanel)
-		
-      splitter1 = QSplitter(Qt.Horizontal)
-      textedit = QTextEdit()
-      splitter1.addWidget(topleft)
-      splitter1.addWidget(textedit)
-      splitter1.setSizes([100,200])
-		
-      splitter2 = QSplitter(Qt.Vertical)
-      splitter2.addWidget(splitter1)
-      splitter2.addWidget(bottom)
-		
-      hbox.addWidget(splitter2)
-		
-      self.setLayout(hbox)
-      QApplication.setStyle(QStyleFactory.create('Cleanlooks'))
-		
-      self.setGeometry(300, 300, 300, 200)
-      self.setWindowTitle('QSplitter demo')
-      self.show()
-		
-def main():
-   app = QApplication(sys.argv)
-   ex = Example()
-   sys.exit(app.exec_())
-	
+class MouseTracker(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+        self.setMouseTracking(True)
+
+    def initUI(self):
+        self.setGeometry(300, 300, 300, 200)
+        self.setWindowTitle('Mouse Tracker')
+        self.label = QLabel(self)
+        self.label.resize(200, 40)
+        self.show()
+
+    def mouseMoveEvent(self, event):
+        print(event.y(),event.x())
+
+
 if __name__ == '__main__':
-   main()
+    app = QApplication(sys.argv)
+    ex = MouseTracker()
+    sys.exit(app.exec_())

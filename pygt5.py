@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
     QFontDialog,
 ) 
 from PyQt5.QtCore import Qt, QEvent, QPoint
-from PyQt5.QtGui import QFont, QTextCursor
+from PyQt5.QtGui import QFont, QTextCursor, QMouseEvent
 
 
 from pathlib import Path
@@ -43,6 +43,7 @@ class MainWindow(QMainWindow):
         self.setGeometry(450, 100, 1000, 700)
         self.setWindowTitle(self.location)
         self.sort_filter = False
+        self.setMouseTracking(True)
 
 
 
@@ -53,9 +54,6 @@ class MainWindow(QMainWindow):
         self.favorites_bar()
         self.ui()
 
-
-
-    
     def toolbars(self):
         toolbar = QToolBar("Toolbar row 1")
         
@@ -148,7 +146,6 @@ class MainWindow(QMainWindow):
             app.setFont(font)
         self.reload()
 
-        
     def reload(self):
         for i in self.children():
             if type(i) == QToolBar:
@@ -156,7 +153,6 @@ class MainWindow(QMainWindow):
         self.toolbars()
         self.favorites_bar()
         self.ui()
-        
 
     def favorites_bar(self):
         f = open("favorites.txt","r")
@@ -300,7 +296,6 @@ class MainWindow(QMainWindow):
         else:
             self.is_search = False
             self.sort_filter = False
-        # filtering not working after searching
         self.apply_sort()
         self.setAcceptDrops(True)
 
@@ -339,9 +334,10 @@ class MainWindow(QMainWindow):
                     search_queue.append(path + title + "\\")
         self.is_search = True
         self.ui()
-        
+
     def eventFilter(self,source, event):
-        
+
+
         if event.type() == QEvent.ContextMenu:
             if type(source) == DragDropWidget:
                 file_extension = "N/A"
@@ -350,8 +346,13 @@ class MainWindow(QMainWindow):
                     print(file_extension)
                 
                 menu = QMenu()
-                rename_button = QAction("Rename")
+                menu.addAction(source.new_text()).setDisabled(True)
 
+                copy_path = QAction("Copy Path")
+                copy_path.triggered.connect(lambda x: self.copy_path(x,source))
+                menu.addAction(copy_path)
+
+                rename_button = QAction("Rename")
                 rename_button.triggered.connect(lambda x: self.rename(x,source))
                 menu.addAction(rename_button)
 
@@ -412,6 +413,10 @@ class MainWindow(QMainWindow):
                 return True
 
         return super().eventFilter(source,event)
+
+    def copy_path(self,x,source):
+        path = source.new_text()
+        QApplication.clipboard().setText(path)
 
     def remove_favorite(self,x,source):
         path1 = source.new_text()
@@ -486,15 +491,27 @@ class MainWindow(QMainWindow):
     def rename(self,x,source):
         rename_text = source.text()
         self.rename_box = QLineEdit(source.text())
+        self.path_bar.deselect()
         self.rename_box.selectAll()
 
+
         self.rename_box.returnPressed.connect(self.rename_action)
-        cursor = QTextCursor()
-        cursor.setPosition(3)
+        self.rename_box.editingFinished.connect(self.stopped_renaming)
+        
         index = self.titles.index(rename_text)
         self.renamed_button = self.lay.itemAt(index).widget()
         self.renamed_button.hide()
         self.lay.insertWidget(index,self.rename_box)
+
+    def stopped_renaming(self):
+        btn = self.make_button(self.renamed_button.new_text())
+        
+        for i,name in enumerate(self.titles):
+            if name.lower() > btn.new_text().lower():
+                break
+        self.lay.insertWidget(i,btn)
+        self.titles.insert(i,btn.new_text())
+        self.rename_box.setParent(None)
 
     def rename_action(self):
 
@@ -590,11 +607,15 @@ class MainWindow(QMainWindow):
         pos = event.pos()
         event.source().setChecked(True)
         event.accept()
-    
+
     def dropEvent(self,event):
         print("oops not yet working")
-        pos = event.pos()
+        x = self.geometry().getCoords()
+        glob = (QCursor().pos().y(),QCursor().pos().x())
+        loc = (glob[1] - x[0],glob[0] - x[1])
 
+        scroll_loc = self.scroll.geometry().getCoords()
+        
         if type(event.source()) == DragDropWidget:
             move_objects = []
             for i in range(len(self.titles)):
@@ -602,11 +623,32 @@ class MainWindow(QMainWindow):
                 if test.isChecked():
                     move_objects.append(test.new_text())
 
-            end_point = event.source()
+            for i in range(len(self.titles)):
+                test = self.lay.itemAt(i).widget()
+                x = test.geometry().getCoords()
+                if loc[0]-scroll_loc[0] <= x[2] and loc[0]-scroll_loc[0]  >= x[0]:
+                    if loc[1]-scroll_loc[1]  < x[3] and loc[1]-scroll_loc[1] >= x[1]:
+                        if test.new_text() not in move_objects:
+                            break
+            
+            fav_loc = self.favorites.geometry().getCoords()
+            for i in self.favorites.children():
+                if type(i) != DragDropWidget:
+                    continue
 
-            if os.path.isdir(self.location + end_point.new_text()) and end_point.isChecked() == False:
+                test = i
+                x = test.geometry().getCoords()
+                if loc[0]-fav_loc[0] <= x[2] and loc[0]-fav_loc[0]  >= x[0]:
+                    if loc[1]-fav_loc[1]  < x[3] and loc[1]-fav_loc[1] >= x[1]:
+                        if test.new_text() not in move_objects:
+                            print(test.text())
+                            break
+
+            end_point = test
+
+            if os.path.isdir(end_point.new_text()) and end_point.isChecked() == False:
                 for name in move_objects:
-                    # os.rename(self.location + name,self.location + end_point.new_text() + "\\" + name)
+                    # os.rename(name,end_point.new_text() + "\\" + name.split("\\")[-1])
                     print("Sorry you'll have to edit the fuction to actually move the file")
                 self.ui()
 
@@ -680,7 +722,7 @@ class MainWindow(QMainWindow):
             os.startfile(buffer[:-1])
 
         self.setWindowTitle(self.location)
-            
+
     def enter_path(self):
         if os.path.exists(self.path_bar.text()):
             self.new_location(self.path_bar.text(),True)
@@ -797,11 +839,8 @@ window.show()
 sys.exit(app.exec_())
 
 
-# fixing the drag and drop fuctionality
 # reincluding the size and modified date
-
 # open with other apps
 # keyboard shortcuts
-# allow you to change fonts
 # moving to parent file
 # picture preview
