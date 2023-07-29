@@ -1,4 +1,5 @@
 
 C:\Users\leocn\OneDrive - Drake University\Desktop
-C:\Windows
-C:\Drivers
+C:\Users\leocn\OneDrive
+C:\Users\leocn\OneDrive - Drake University
+C:\Users\leocn\Downloads

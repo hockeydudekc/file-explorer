@@ -13,33 +13,36 @@ from PyQt5.QtWidgets import (
     QMenu,
     QCheckBox,
     QSplitter,
+    QFontDialog,
 ) 
-from PyQt5.QtCore import Qt, QEvent, QPoint, QSize
+from PyQt5.QtCore import Qt, QEvent, QPoint
 from PyQt5.QtGui import QFont, QTextCursor
 
 
 from pathlib import Path
 import sys
-import subprocess
+from zipfile import ZipFile, ZIP_DEFLATED
 import os
 import time
 import shutil
 import qdarktheme
+import gzip
 from custom_classes import *
 
 
 
 class MainWindow(QMainWindow): 
-    def __init__(self,location):
+    def __init__(self,location,font = QFont("Terminal",10)):
         super().__init__()
         self.location = location
         self.timer = time.time()
         self.selected_items = []
         self.double_click_event = False
         self.clipboard = (None,None)
-        self.font = QFont("Terminal",10)
+        self.font = font
         self.setGeometry(450, 100, 1000, 700)
         self.setWindowTitle(self.location)
+        self.sort_filter = False
 
 
 
@@ -48,7 +51,6 @@ class MainWindow(QMainWindow):
 
         self.toolbars()
         self.favorites_bar()
-
         self.ui()
 
 
@@ -62,32 +64,27 @@ class MainWindow(QMainWindow):
         go_back_button = QAction("Go Back", self)
         go_back_button.setStatusTip("Go Back")
         go_back_button.triggered.connect(self.go_back)
-        go_back_button.setFont(self.font)
         toolbar.addAction(go_back_button)
 
         go_forward_button = QAction("Go Forward", self)
         go_forward_button.setStatusTip("Go Forward")
         go_forward_button.triggered.connect(self.go_forward)
-        go_forward_button.setFont(self.font)
         toolbar.addAction(go_forward_button)
 
         parent_button = QAction("Go To Parent", self)
         parent_button.setStatusTip("Go To Parent")
         parent_button.triggered.connect(self.parent)
-        parent_button.setFont(self.font)
         toolbar.addAction(parent_button)
 
         create_button = QAction("Create", self)
         create_button.setStatusTip("Create a new file")
         create_button.triggered.connect(self.create_window)
-        create_button.setFont(self.font)
         self.window2 = None
         toolbar.addAction(create_button)
 
         self.path_bar = QLineEdit(self.location)
         self.path_bar.returnPressed.connect(self.enter_path)
         self.path_bar.setTextMargins(5,0,5,0)
-        self.path_bar.setFont(self.font)
         toolbar.addWidget(self.path_bar)
 
         toolbar.addWidget(QLabel("       "))
@@ -97,7 +94,6 @@ class MainWindow(QMainWindow):
         self.search_bar.setTextMargins(5,0,5,0)
         self.search_bar.setMaximumWidth(300)
         self.search_bar.returnPressed.connect(self.enter_search)
-        self.search_bar.setFont(self.font)
         self.is_search = False
         toolbar.addWidget(self.search_bar)
 
@@ -109,7 +105,6 @@ class MainWindow(QMainWindow):
         self.addToolBar(toolbar2)
         
         drop_down = CheckableComboBox()
-        drop_down.setFont(self.font)
         drop_down.setMinimumWidth(150)
 
         drop_down.addItem("File")
@@ -127,7 +122,6 @@ class MainWindow(QMainWindow):
         toolbar2.addWidget(drop_down)
 
         self.sort_box = CheckableComboBox()
-        self.sort_box.setFont(self.font)
         self.sort_box.setMinimumWidth(150)
         self.sort_box.addItem("A-Z")
         self.sort_box.setItemChecked(0, True)
@@ -143,6 +137,27 @@ class MainWindow(QMainWindow):
 
         toolbar2.addWidget(self.sort_box)
 
+        fontChoice = QAction('Font', self)
+        fontChoice.triggered.connect(self.font_choice)
+
+        toolbar2.addAction(fontChoice)
+    
+    def font_choice(self):
+        font, valid = QFontDialog.getFont()
+        if valid:
+            app.setFont(font)
+        self.reload()
+
+        
+    def reload(self):
+        for i in self.children():
+            if type(i) == QToolBar:
+                self.removeToolBar(i)
+        self.toolbars()
+        self.favorites_bar()
+        self.ui()
+        
+
     def favorites_bar(self):
         f = open("favorites.txt","r")
         f = f.read()
@@ -153,7 +168,6 @@ class MainWindow(QMainWindow):
         # self.favorites.setMaximumWidth(200)
         n = QLabel("Favorites")
         n.setAlignment(Qt.AlignCenter)
-        n.setFont(self.font)
         self.favorites.addWidget(n)
         for i in range(len(self.favorites_list)):
             btn = self.make_button(self.favorites_list[i])
@@ -170,7 +184,7 @@ class MainWindow(QMainWindow):
             self.sort_box.setItemChecked(2, False)
             self.sort_box.setItemChecked(3, False)
             self.sort_box.setItemChecked(x, True)
-        
+        self.sort_filter = True
         self.ui()
 
     def apply_sort(self):
@@ -211,6 +225,7 @@ class MainWindow(QMainWindow):
             self.filters[x] = False
         else:
             self.filters[x] = True
+        self.sort_filter = True
         self.ui()
 
     def create_window(self, checked):
@@ -279,12 +294,13 @@ class MainWindow(QMainWindow):
         self.widget = QWidget()
         self.lay = QVBoxLayout()
 
-        if self.is_search == False:
+        if self.is_search == False and self.sort_filter == False:
             self.path_bar.setText(self.location)
             self.titles = os.listdir(self.location)
         else:
             self.is_search = False
-
+            self.sort_filter = False
+        # filtering not working after searching
         self.apply_sort()
         self.setAcceptDrops(True)
 
@@ -325,14 +341,20 @@ class MainWindow(QMainWindow):
         self.ui()
         
     def eventFilter(self,source, event):
-
+        
         if event.type() == QEvent.ContextMenu:
             if type(source) == DragDropWidget:
+                file_extension = "N/A"
+                if "." in source.new_text().split("\\")[-1]:
+                    file_extension = source.text().split('.')[-1]
+                    print(file_extension)
                 
                 menu = QMenu()
                 rename_button = QAction("Rename")
+
                 rename_button.triggered.connect(lambda x: self.rename(x,source))
                 menu.addAction(rename_button)
+
                 delete_button = QAction("Delete")
                 delete_button.triggered.connect(lambda x: self.delete(x,source))
                 menu.addAction(delete_button)
@@ -346,13 +368,35 @@ class MainWindow(QMainWindow):
                     paste_button = QAction("Paste")
                     paste_button.triggered.connect(lambda x: self.paste(x,source))
                     menu.addAction(paste_button)
-                favorite_button = QAction("Add Favorite")
-                favorite_button.triggered.connect(lambda x: self.add_favorite(x,source))
-                menu.addAction(favorite_button)
+                
+                if source.new_text() not in self.favorites_list:
+                    favorite_button = QAction("Add Favorite")
+                    favorite_button.triggered.connect(lambda x: self.add_favorite(x,source))
+                    menu.addAction(favorite_button)
 
-                remove_favorite_button = QAction("Remove Favorite")
-                remove_favorite_button.triggered.connect(lambda x: self.remove_favorite(x,source))
-                menu.addAction(remove_favorite_button)
+                else:
+                    remove_favorite_button = QAction("Remove Favorite")
+                    remove_favorite_button.triggered.connect(lambda x: self.remove_favorite(x,source))
+                    menu.addAction(remove_favorite_button)
+
+                if file_extension.lower() in ["zip",'gz']:
+                    extract_file = QAction("Extract...")
+                    extract_file.triggered.connect(lambda x: self.extract_zip(source.new_text()))
+                    menu.addAction(extract_file)
+
+                else:
+                    compress_menu = QMenu("Compress to...")
+                    zip = QAction("compress to zip")
+                    zip.triggered.connect(lambda x: self.compress_zip(source.new_text()))
+                    
+                    gzip = QAction("Compress to gz")
+                    gzip.triggered.connect(lambda x: self.gzip(source.new_text()))
+
+
+                compress_menu.addAction(zip)
+                compress_menu.addAction(gzip)
+                menu.addMenu(compress_menu)
+
 
                 new_pos = QPoint(event.globalX()+10,event.globalY()+12)
                 menu.exec_(new_pos)
@@ -370,7 +414,7 @@ class MainWindow(QMainWindow):
         return super().eventFilter(source,event)
 
     def remove_favorite(self,x,source):
-        path1 = self.location + source.text()
+        path1 = source.new_text()
         if os.path.exists(path1):
             if path1 in self.favorites_list:
                 with open('favorites.txt', 'w') as file2:
@@ -445,7 +489,6 @@ class MainWindow(QMainWindow):
         self.rename_box.selectAll()
 
         self.rename_box.returnPressed.connect(self.rename_action)
-        self.rename_box.setFont(self.font)
         cursor = QTextCursor()
         cursor.setPosition(3)
         index = self.titles.index(rename_text)
@@ -488,6 +531,8 @@ class MainWindow(QMainWindow):
                 icon.addPixmap(QtGui.QPixmap("C:\\Users\\leocn\\OneDrive - Drake University\\Documents\\Coding\\file explorer\\icons\\powerpoint.png"))
             elif extention == "bin":
                 icon.addPixmap(QtGui.QPixmap("C:\\Users\\leocn\\OneDrive - Drake University\\Documents\\Coding\\file explorer\\icons\\bin.png"))
+            elif extention == "lnk":
+                icon.addPixmap(QtGui.QPixmap("C:\\Users\\leocn\\OneDrive - Drake University\\Documents\\Coding\\file explorer\\icons\\link.png"))
             elif extention == "py":
                 icon.addPixmap(QtGui.QPixmap("C:\\Users\\leocn\\OneDrive - Drake University\\Documents\\Coding\\file explorer\\icons\\py.png"))
             elif extention == "zip":
@@ -539,7 +584,6 @@ class MainWindow(QMainWindow):
         btn.clicked.connect(lambda ch, text=path : self.click_check(text)) # look at this
         btn.installEventFilter(self)
         btn.setStyleSheet("QPushButton { text-align: left; }")
-        btn.setFont(self.font)
         return btn
 
     def dragEnterEvent(self,event):
@@ -645,6 +689,36 @@ class MainWindow(QMainWindow):
             self.errors = ErrorWindow("The file path: '" + n + "' doesn't exist")
             self.errors.show()
 
+    def extract_zip(self,path):
+        if path.split(".")[-1] == "gz":
+
+            with open(path, 'rb') as inf, open(path[:-3], 'w', encoding='utf8') as tof:
+                decom_str = gzip.decompress(inf.read()).decode('utf-8')
+                tof.write(decom_str)
+        else:
+            x = "\\".join(path.split("\\")[:-1])
+
+            with ZipFile(path, 'r') as zip:
+                print(zip.namelist())
+                zip.extractall(x)
+                print("worked")
+        self.ui()
+        
+    def compress_zip(self,path):
+
+        end_zip = ".".join(path.split(".")[:-1]) + ".zip"
+
+        with ZipFile(end_zip, 'w', compression=ZIP_DEFLATED) as myzip:
+            myzip.write(path)
+    
+    def gzip(self,path):
+        
+        end_gzip = path + ".gz"
+
+        with open(path, 'rb') as f_in, gzip.open(end_gzip, 'wb') as f_out:
+            f_out.writelines(f_in)
+        self.ui()
+
 
 class CreateWindow(QWidget):
 
@@ -659,21 +733,16 @@ class CreateWindow(QWidget):
         self.name = QLineEdit()
 
         self.name.setPlaceholderText("Enter File Name")
-        self.name.setFont(self.font)
         self.name.installEventFilter(self)
         layout.addWidget(self.name)
 
         self.is_dir = QCheckBox("Is this a folder")
-        self.is_dir.setFont(self.font)
         layout.addWidget(self.is_dir)
 
         self.label = QPushButton("create file")
-        self.label.setFont(self.font)
         self.label.clicked.connect(self.create_file)
         layout.addWidget(self.label)
         self.setLayout(layout)
-
-
 
     def eventFilter(self,source, event):
         return super().eventFilter(source,event)
@@ -684,13 +753,13 @@ class CreateWindow(QWidget):
         else:
             f = open(self.location + self.name.text(), "x")
 
-        btn = window.make_button(self.name.text())
+        btn = window.make_button(self.location + self.name.text())
         i = 0
         for i,name in enumerate(window.titles):
-            if name.lower() > btn.new_text().lower():
+            if name.lower() > btn.text().lower():
                 break
         window.lay.insertWidget(i,btn)
-        window.titles.insert(i,btn.new_text())
+        window.titles.insert(i,btn.text())
         self.close()
 
 class ErrorWindow(QWidget):
@@ -719,6 +788,7 @@ class ErrorWindow(QWidget):
 
 
 app = QApplication(sys.argv)
+app.setFont(QFont("Terminal",10))
 qdarktheme.setup_theme()
 window = MainWindow("C:\\")
 window.show()
@@ -729,7 +799,7 @@ sys.exit(app.exec_())
 
 # fixing the drag and drop fuctionality
 # reincluding the size and modified date
-# zipping and unzipping file
+
 # open with other apps
 # keyboard shortcuts
 # allow you to change fonts
