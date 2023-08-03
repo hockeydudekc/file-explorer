@@ -198,11 +198,12 @@ class DragDropWidget(QPushButton):
         self.file_type = -1
     
     def mouseMoveEvent(self, event):
-        mime_data = QMimeData()
-        drag = QDrag(self)
-        drag.setMimeData(mime_data)
-        drag.setHotSpot(event.pos())
-        drag.exec_(Qt.MoveAction)
+        if event.buttons() == Qt.LeftButton:
+            mime_data = QMimeData()
+            drag = QDrag(self)
+            drag.setMimeData(mime_data)
+            drag.setHotSpot(event.pos())
+            drag.exec_(Qt.MoveAction)
 
     def new_text(self):
         return self.full_title

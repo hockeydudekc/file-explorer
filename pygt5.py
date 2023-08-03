@@ -12,11 +12,11 @@ from PyQt5.QtWidgets import (
     QLabel,
     QMenu,
     QCheckBox,
-    QSplitter,
     QFontDialog,
+    
 ) 
 from PyQt5.QtCore import Qt, QEvent, QPoint
-from PyQt5.QtGui import QFont, QTextCursor, QMouseEvent
+from PyQt5.QtGui import QFont
 
 
 from pathlib import Path
@@ -33,6 +33,7 @@ from custom_classes import *
 
 class MainWindow(QMainWindow): 
     def __init__(self,location,font = QFont("Terminal",10)):
+        
         super().__init__()
         self.location = location
         self.timer = time.time()
@@ -44,15 +45,19 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(self.location)
         self.sort_filter = False
         self.setMouseTracking(True)
-
+        self.installEventFilter(self)
 
 
         self.forward_stack = []
         self.back_stack = []
 
+        self.cur_location = (0,0)
+        self.m = QWidget()
         self.toolbars()
         self.favorites_bar()
         self.ui()
+
+
 
     def toolbars(self):
         toolbar = QToolBar("Toolbar row 1")
@@ -139,7 +144,7 @@ class MainWindow(QMainWindow):
         fontChoice.triggered.connect(self.font_choice)
 
         toolbar2.addAction(fontChoice)
-    
+
     def font_choice(self):
         font, valid = QFontDialog.getFont()
         if valid:
@@ -155,7 +160,7 @@ class MainWindow(QMainWindow):
         self.ui()
 
     def favorites_bar(self):
-        f = open("favorites.txt","r")
+        f = open("C:\\Users\\leocn\\OneDrive - Drake University\\Documents\\Coding\\file explorer\\favorites.txt","r")
         f = f.read()
         self.favorites_list = f.split("\n")[1:]
 
@@ -336,7 +341,14 @@ class MainWindow(QMainWindow):
         self.ui()
 
     def eventFilter(self,source, event):
+        # print((QCursor().pos().y(),QCursor().pos().x()))
 
+        # if self.cur_location != (QCursor().pos().y(),QCursor().pos().x()):
+        #     self.m.deleteLater()
+        #     self.m = PaintWidget(self)
+        #     self.m.move(0,0)
+        #     self.m.resize(1920,1080)
+            
 
         if event.type() == QEvent.ContextMenu:
             if type(source) == DragDropWidget:
@@ -615,7 +627,7 @@ class MainWindow(QMainWindow):
         loc = (glob[1] - x[0],glob[0] - x[1])
 
         scroll_loc = self.scroll.geometry().getCoords()
-        
+        end_point = False
         if type(event.source()) == DragDropWidget:
             move_objects = []
             for i in range(len(self.titles)):
@@ -629,7 +641,10 @@ class MainWindow(QMainWindow):
                 if loc[0]-scroll_loc[0] <= x[2] and loc[0]-scroll_loc[0]  >= x[0]:
                     if loc[1]-scroll_loc[1]  < x[3] and loc[1]-scroll_loc[1] >= x[1]:
                         if test.new_text() not in move_objects:
+                            end_point = test
                             break
+            
+
             
             fav_loc = self.favorites.geometry().getCoords()
             for i in self.favorites.children():
@@ -642,19 +657,17 @@ class MainWindow(QMainWindow):
                     if loc[1]-fav_loc[1]  < x[3] and loc[1]-fav_loc[1] >= x[1]:
                         if test.new_text() not in move_objects:
                             print(test.text())
+                            end_point = test
                             break
 
-            end_point = test
-
-            if os.path.isdir(end_point.new_text()) and end_point.isChecked() == False:
+            if end_point != False and os.path.isdir(end_point.new_text()) and end_point.isChecked() == False:
                 for name in move_objects:
-                    # os.rename(name,end_point.new_text() + "\\" + name.split("\\")[-1])
+                    os.rename(name,end_point.new_text() + "\\" + name.split("\\")[-1])
                     print("Sorry you'll have to edit the fuction to actually move the file")
                 self.ui()
 
     def click_check(self,event):
-        
-        if .05 < time.time() - self.timer < .5 and self.double_click_event == event:
+        if .1 < time.time() - self.timer < .5 and self.double_click_event == event and Qt.LeftButton:
             if event[0:2] == "C:":
                 self.new_location(event, absolute=True)
             else:
@@ -696,7 +709,7 @@ class MainWindow(QMainWindow):
             self.forward_stack.pop()
             print("cant go back")
         self.setWindowTitle(self.location)
-    
+
     def new_location(self,path, absolute = False):
 
         self.search_bar.setText("")
@@ -745,14 +758,14 @@ class MainWindow(QMainWindow):
                 zip.extractall(x)
                 print("worked")
         self.ui()
-        
+   
     def compress_zip(self,path):
 
         end_zip = ".".join(path.split(".")[:-1]) + ".zip"
 
         with ZipFile(end_zip, 'w', compression=ZIP_DEFLATED) as myzip:
             myzip.write(path)
-    
+
     def gzip(self,path):
         
         end_gzip = path + ".gz"
@@ -826,7 +839,6 @@ class ErrorWindow(QWidget):
     
     def c(self):
         self.close()
-
 
 
 app = QApplication(sys.argv)
